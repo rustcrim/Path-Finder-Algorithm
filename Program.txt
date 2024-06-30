@@ -1,0 +1,497 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+
+class Obstacle
+{
+    public string Type { get; set; }
+    public int X { get; set; }
+    public int Y { get; set; }
+    public double Range { get; set; }
+    public string Direction { get; set; }
+
+    public Obstacle(string type, int x, int y, double range, string direction)
+    {
+        Type = type;
+        X = x;
+        Y = y;
+        Range = range;
+        Direction = direction;
+    }
+}
+
+abstract class MapObject
+{
+    protected List<Obstacle> obstacles = new List<Obstacle>();
+
+    public void AddObstacle(Obstacle obstacle)
+    {
+        obstacles.Add(obstacle);
+    }
+
+    public abstract bool IsBlocked(int x, int y);
+
+    class Program
+    {
+        static List<Obstacle> obstacles = new List<Obstacle>();
+        static int agentX, agentY;
+        static int mapWidth = 65;
+        static int mapHeight = 65;
+        static int[,] mapGrid = new int[mapWidth, mapHeight];
+
+        static void Main()
+        {
+            while (true)
+            {
+                Console.WriteLine("Select one of the following options:");
+                Console.WriteLine("g) Add 'Guard' obstacle");
+                Console.WriteLine("f) Add 'Fence' obstacle");
+                Console.WriteLine("s) Add 'Sensor' obstacle");
+                Console.WriteLine("c) Add 'Camera' obstacle");
+                Console.WriteLine("d) Show safe directions");
+                Console.WriteLine("m) Display obstacle map");
+                Console.WriteLine("p) Find safe path");
+                Console.WriteLine("x) Exit");
+                Console.Write("Enter code: ");
+
+                string option = Console.ReadLine().ToLower();
+
+                switch (option)
+                {
+                    case "g":
+                        GuardOb();//guard obstacle
+                        break;
+                    case "f":
+                        FenceOb();//fence obstacle
+                        break;
+                    case "s":
+                        SensorOb();//sensor obstacle
+                        break;
+                    case "c":
+                        CameraOb();//camera obstacle
+                        break;
+                    case "d":
+                        ShowSafeDirections();
+                        break;
+                    case "m":
+                        Displaymap();//show map
+                        break;
+                    case "p":
+                        FindSafePath();
+                        break;
+                    case "x":
+                        Environment.Exit(0);
+                        break;
+                    default:
+                        Console.WriteLine("Invalid option.");
+                        break;
+                }
+            }
+        }
+
+        static void Displaymap() //Displaying the obstacle map
+        {
+            int topLeftX, topLeftY, bottomRightX, bottomRightY;
+
+            Console.WriteLine("Enter the location of the top-left cell of the map (X,Y):");
+            if (CoordinatePair(out topLeftX, out topLeftY))
+            {
+                Console.WriteLine("Enter the location of the bottom-right cell of the map (X,Y):");
+                if (CoordinatePair(out bottomRightX, out bottomRightY))
+                {
+                    if (topLeftX > bottomRightX || topLeftY > bottomRightY)
+                    {
+                        Console.WriteLine("Invalid map specification.");
+                    }
+                    else
+                    {
+                        for (int y = topLeftY; y <= bottomRightY; y++)
+                        {
+                            for (int x = topLeftX; x <= bottomRightX; x++)
+                            {
+                                if (x < 0 || x >= mapWidth || y < 0 || y >= mapHeight)
+                                {
+                                    Console.Write("Invalid Cell ");
+                                }
+                                else if (ObAt(x, y))
+                                {
+                                    // Check for 'c' (Camera) before 's' (Sensor), 'f' (Fence), and 'g' (Guard)
+                                    if (CamAt(x, y))
+                                    {
+                                        Console.Write("c");
+                                    }
+                                    else if (SensorAt(x, y))
+                                    {
+                                        Console.Write("s");
+                                    }
+                                    else if (FenceAt(x, y))
+                                    {
+                                        Console.Write("f");
+                                    }
+                                    else
+                                    {
+                                        Console.Write("g");
+                                    }
+                                }
+                                else
+                                {
+
+                                    Console.Write(".");
+                                }
+                            }
+                            Console.WriteLine();
+                        }
+                    }
+                }
+            }
+        }
+
+        static void GuardOb()//Adding Guard obstacle on map
+        {
+            Console.WriteLine("Enter the guard's location (X,Y):");
+            if (CoordinatePair(out int guardX, out int guardY))
+            {
+                if (guardX >= 0 && guardX < mapWidth && guardY >= 0 && guardY < mapHeight)
+                {
+                    // Add the guard obstacle to the list of obstacles
+                    obstacles.Add(new Obstacle("Guard", guardX, guardY, 0.0, "")); // Guard doesn't have a range or direction
+
+                    // Update the mapGrid to mark the guard's location
+                    mapGrid[guardX, guardY] = 1; // You can use any value to represent a guard on the map
+
+                    Console.WriteLine("Guard added at location ({0},{1}).", guardX, guardY);
+                }
+                else
+                {
+                    Console.WriteLine("Invalid guard location. Coordinates out of bounds.");
+                }
+            }
+        }
+
+        static bool ObAt(int x, int y) //Checking the presence of obstacle 
+        {
+            // Check if there is an obstacle at the specified coordinates
+            foreach (Obstacle obstacle in obstacles)
+            {
+                if (obstacle.X == x && obstacle.Y == y)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        static void FenceOb() //Adding fence obstacle on map
+        {
+            Console.WriteLine("Enter the location where the fence starts (X,Y):");
+            if (CoordinatePair(out int startX, out int startY))
+            {
+                Console.WriteLine("Enter the location where the fence ends (X,Y):");
+                if (CoordinatePair(out int endX, out int endY))
+                {
+                    if (startX == endX || startY == endY) //Fences must be horizontal or vertical
+                    {
+                        for (int x = Math.Min(startX, endX); x <= Math.Max(startX, endX); x++)
+                        {
+                            for (int y = Math.Min(startY, endY); y <= Math.Max(startY, endY); y++)
+                            {
+                                if (x >= 0 && x < mapWidth && y >= 0 && y < mapHeight)
+                                {
+                                    // Adding the fence obstacle to the list of obstacles
+                                    obstacles.Add(new Obstacle("Fence", x, y, 0.0, "")); // Fence doesn't have a range or direction
+                                }
+                            }
+                        }
+
+                        Console.WriteLine("Fence added.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Fences must be horizontal or vertical.");
+                    }
+                }
+            }
+        }
+
+        static bool FenceAt(int x, int y) //checking the presence of fences on map
+        {
+            // Check if there is a fence at the specified coordinates
+            foreach (Obstacle obstacle in obstacles)
+            {
+                if (obstacle.Type == "Fence" && obstacle.X == x && obstacle.Y == y)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        static void SensorOb() //Adding sensor obstacle
+        {
+            Console.WriteLine("Enter the sensor's location (X,Y):");
+            if (CoordinatePair(out int sensorX, out int sensorY))
+            {
+                Console.WriteLine("Enter the sensor's range (in klicks):");
+                if (double.TryParse(Console.ReadLine(), out double range) && range > 0) //sensor will have a range 
+                {
+                    // Adding the sensor obstacle to the list of obstacles
+                    obstacles.Add(new Obstacle("Sensor", sensorX, sensorY, range, ""));
+
+                    Console.WriteLine("Sensor added at location ({0},{1}) with range {2} klicks.", sensorX, sensorY, range);
+                }
+                else
+                {
+                    Console.WriteLine("Invalid sensor range. The range must be a positive value.");
+                }
+            }
+        }
+
+        static bool SensorAt(int x, int y) //Checking for presence of sensors on map
+        {
+            foreach (Obstacle obstacle in obstacles)
+            {
+                if (obstacle.Type == "Sensor" && SensorRange(obstacle, x, y))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        static bool SensorRange(Obstacle sensor, int x, int y) //checking for sensor's range
+        {
+            double distance = Math.Sqrt(Math.Pow(sensor.X - x, 2) + Math.Pow(sensor.Y - y, 2));
+            return distance <= sensor.Range;
+        }
+        static void CameraOb() //Adding camera obstacle on map
+        {
+            Console.WriteLine("Enter the camera's location (X,Y):");
+            if (CoordinatePair(out int cameraX, out int cameraY))
+            {
+                Console.WriteLine("Enter the direction the camera is facing (n, s, e or w):");
+                string direction = Console.ReadLine().ToLower();
+                if (ValidCamDirection(direction))
+                {
+
+                    // Adding the camera obstacle to the list of obstacles
+                    obstacles.Add(new Obstacle("Camera", cameraX, cameraY, 0.0, direction));
+
+                    Console.WriteLine("Camera added at location ({0},{1}) facing {2}.", cameraX, cameraY, direction);
+                }
+                else
+                {
+                    Console.WriteLine("Invalid direction. The camera's direction must be n, s, e, or w.");
+                }
+            }
+        }
+        static bool ValidCamDirection(string direction) //Camera can only face north (n), east(e), west (w) or south (s).
+        {
+            return direction == "n" || direction == "s" || direction == "e" || direction == "w";
+        }
+        static bool CamAt(int x, int y) //Checking the presence of cameras on map
+        {
+            return obstacles.Any(obstacle => obstacle.Type == "Camera" && CamVision(obstacle, x, y, agentX, agentY));
+        }
+        static bool CamVision(Obstacle camera, int x, int y, int agentX, int agentY)
+        {
+            // Calculate angle  between camera's direction and the vector
+            double angle = Math.Atan2(y - camera.Y, x - camera.X) * (180 / Math.PI);
+            double directionAngle = CamAngle(camera.Direction);
+
+            // Check if the point is within the 90-degree cone of vision
+            double deltaAngle = Math.Abs((angle - directionAngle + 360) % 360);
+
+            // Check if the point is also within the agent's view radius
+            double distance = Math.Sqrt(Math.Pow(agentX - x, 2) + Math.Pow(agentY - y, 2));
+
+            return deltaAngle <= 45 || deltaAngle >= 315 || distance <= 5.0;
+        }
+
+
+        static double CamAngle(string direction)
+        {
+            switch (direction)
+            {
+                case "n":
+                    return 90;
+                case "s":
+                    return 270;
+                case "e":
+                    return 0;
+                case "w":
+                    return 180;
+                default:
+                    return 0;
+            }
+        }
+
+
+
+        static void ShowSafeDirections() //Figure out safe directions 
+        {
+            Console.WriteLine("Enter your current location (X,Y):");
+            if (CoordinatePair(out int agentX, out int agentY))
+            {
+                if (IsBlocked(agentX, agentY))
+                {
+                    Console.WriteLine("Agent, your location is compromised. Abort mission.");
+                }
+                else
+                {
+                    List<string> safeDirections = SafeDirections(agentX, agentY);
+                    if (safeDirections.Count == 0)
+                    {
+                        Console.WriteLine("You cannot safely move in any direction. Abort mission.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("You can safely take any of the following directions: " + string.Join("", safeDirections));
+                    }
+                }
+            }
+        }
+
+        static void FindSafePath() //finding safe path
+        {
+            Console.WriteLine("Enter your current location (X,Y):");
+            if (CoordinatePair(out int agentX, out int agentY))
+            {
+                Console.WriteLine("Enter the location of the mission objective (X,Y):");
+                if (CoordinatePair(out int objectiveX, out int objectiveY))
+                {
+                    if (agentX == objectiveX && agentY == objectiveY)
+                    {
+                        Console.WriteLine("Agent, you are already at the objective.");
+                    }
+                    else if (IsBlocked(objectiveX, objectiveY))
+                    {
+                        Console.WriteLine("The objective is blocked by an obstacle and cannot be reached.");
+                    }
+                    else
+                    {
+                        string path = FindPath(agentX, agentY, objectiveX, objectiveY);
+                        if (!string.IsNullOrEmpty(path))
+                        {
+                            Console.WriteLine("The following path will take you to the objective:");
+                            Console.WriteLine(path);
+                        }
+                        else
+                        {
+                            Console.WriteLine("There is no safe path to the objective.");
+                        }
+                    }
+                }
+            }
+        }
+
+        static bool IsBlocked(int x, int y)
+        {
+            // Check if the specified location is blocked by obstacles
+            return ObAt(x, y) || FenceAt(x, y) || SensorAt(x, y) || CamAt(x, y);
+        }
+
+        static List<string> SafeDirections(int x, int y) //Find safe directions to move
+        {
+            List<string> safeDirections = new List<string>();
+
+            // Check each direction (N, S, E, W) and add it to the safe directions list if it's not blocked
+            if (!IsBlocked(x, y - 1)) safeDirections.Add("N");
+            if (!IsBlocked(x, y + 1)) safeDirections.Add("S");
+            if (!IsBlocked(x + 1, y)) safeDirections.Add("E");
+            if (!IsBlocked(x - 1, y)) safeDirections.Add("W");
+
+            foreach (var sensor in obstacles.Where(obstacle => obstacle.Type == "Sensor"))
+            {
+                if (SensorRange(sensor, x, y - 1) && safeDirections.Contains("N"))
+                {
+                    safeDirections.Remove("N");
+                }
+                if (SensorRange(sensor, x, y + 1) && safeDirections.Contains("S"))
+                {
+                    safeDirections.Remove("S");
+                }
+                if (SensorRange(sensor, x + 1, y) && safeDirections.Contains("E"))
+                {
+                    safeDirections.Remove("E");
+                }
+                if (SensorRange(sensor, x - 1, y) && safeDirections.Contains("W"))
+                {
+                    safeDirections.Remove("W");
+                }
+            }
+
+            foreach (var camera in obstacles.Where(obstacle => obstacle.Type == "Camera"))
+            {
+                if (CamAt(x, y) && safeDirections.Count > 0)
+                {
+                    // If a camera is at the current location, it can block all directions.
+                    safeDirections.Clear();
+                }
+            }
+            return safeDirections;
+        }
+
+        static string FindPath(int startX, int startY, int endX, int endY) //Finding safe path
+        {
+            // Assumed pathfinding algorithm using BFS.
+            Queue<Tuple<int, int, string>> queue = new Queue<Tuple<int, int, string>>();
+            bool[,] visited = new bool[mapWidth, mapHeight];
+
+            queue.Enqueue(Tuple.Create(startX, startY, ""));
+            visited[startX, startY] = true;
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                int x = current.Item1;
+                int y = current.Item2;
+                string path = current.Item3;
+
+                if (x == endX && y == endY)
+                {
+                    return path;
+                }
+
+                // Check and enqueue adjacent cells
+                if (x > 0 && !visited[x - 1, y] && !IsBlocked(x - 1, y))
+                {
+                    queue.Enqueue(Tuple.Create(x - 1, y, path + "W"));
+                    visited[x - 1, y] = true;
+                }
+                if (x < mapWidth - 1 && !visited[x + 1, y] && !IsBlocked(x + 1, y))
+                {
+                    queue.Enqueue(Tuple.Create(x + 1, y, path + "E"));
+                    visited[x + 1, y] = true;
+                }
+                if (y > 0 && !visited[x, y - 1] && !IsBlocked(x, y - 1))
+                {
+                    queue.Enqueue(Tuple.Create(x, y - 1, path + "N"));
+                    visited[x, y - 1] = true;
+                }
+                if (y < mapHeight - 1 && !visited[x, y + 1] && !IsBlocked(x, y + 1))
+                {
+                    queue.Enqueue(Tuple.Create(x, y + 1, path + "S"));
+                    visited[x, y + 1] = true;
+                }
+            }
+
+            return null; 
+        }
+        static bool CoordinatePair(out int x, out int y) //input and validate coordinate pairs
+        {
+            string input = Console.ReadLine();
+            string[] parts = input.Split(',');
+            if (parts.Length == 2 && int.TryParse(parts[0], out x) && int.TryParse(parts[1], out y))
+            {
+                return true;
+            }
+            else
+            {
+                Console.WriteLine("Invalid input.");
+                x = 0;
+                y = 0;
+                return false;
+            }
+        }
+    }
+}
